@@ -19,7 +19,7 @@
 
 package com.starrocks.connector.spark.sql.schema;
 
-import com.starrocks.connector.spark.exception.StarrocksException;
+import com.starrocks.connector.spark.exception.StarRocksException;
 import com.starrocks.connector.spark.sql.conf.SimpleStarRocksConfig;
 import com.starrocks.connector.spark.sql.conf.StarRocksConfig;
 import com.starrocks.connector.spark.sql.connect.StarRocksConnector;
@@ -39,8 +39,11 @@ public final class InferSchema {
 
     public static StructType inferSchema(Map<String, String> options) {
         SimpleStarRocksConfig config = new SimpleStarRocksConfig(options);
-        StarRocksSchema starocksSchema = StarRocksConnector.getSchema(config);
-        return inferSchema(starocksSchema, config);
+        StarRocksConnector srConnector = new StarRocksConnector(
+                config.getFeJdbcUrl(), config.getUsername(), config.getPassword());
+        StarRocksSchema starrocksSchema = srConnector.getSchema(
+                new TableIdentifier(config.getDatabase(), config.getTable()));
+        return inferSchema(starrocksSchema, config);
     }
 
     public static StructType inferSchema(StarRocksSchema starRocksSchema, StarRocksConfig config) {
@@ -59,9 +62,10 @@ public final class InferSchema {
                 starRocksFields.add(field);
             }
             if (!nonExistedColumns.isEmpty()) {
-                throw new StarrocksException(
+                throw new StarRocksException(
                         String.format("Can't find those columns %s in StarRocks table `%s`.`%s`. " +
-                                "Please check your configuration 'starrocks.columns' to make sure all columns exist in the table",
+                                        "Please check your configuration 'starrocks.columns' " +
+                                        "to make sure all columns exist in the table",
                                 nonExistedColumns, config.getDatabase(), config.getTable()));
             }
         }
@@ -81,7 +85,7 @@ public final class InferSchema {
 
     static Map<String, StructField> parseCustomTypes(String columnTypes) {
         if (columnTypes == null) {
-            return new HashMap<>();
+            return new HashMap<>(0);
         }
 
         Map<String, StructField> customTypes = new HashMap<>();
@@ -97,6 +101,7 @@ public final class InferSchema {
 
         return new StructField(field.getName(), dataType, true, Metadata.empty());
     }
+
     static DataType inferDataType(StarRocksField field) {
         String type = field.getType().toLowerCase(Locale.ROOT);
         switch (type) {
@@ -113,20 +118,32 @@ public final class InferSchema {
                 return DataTypes.LongType;
             case "bigint unsigned":
                 return DataTypes.StringType;
+            case "largeint":
+                return DataTypes.StringType;
             case "float":
                 return DataTypes.FloatType;
             case "double":
                 return DataTypes.DoubleType;
             case "decimal":
-                return DataTypes.createDecimalType(Integer.parseInt(field.getSize()), Integer.parseInt(field.getScale()));
+            case "decimalv2":
+            case "decimal32":
+            case "decimal64":
+            case "decimal128":
+                return DataTypes.createDecimalType(field.getPrecision(), field.getScale());
             case "char":
             case "varchar":
+            case "string":
             case "json":
                 return DataTypes.StringType;
             case "date":
                 return DataTypes.DateType;
             case "datetime":
                 return DataTypes.TimestampType;
+            case "boolean":
+                return DataTypes.BooleanType;
+            case "binary":
+            case "varbinary":
+                return DataTypes.BinaryType;
             default:
                 throw new UnsupportedOperationException(String.format(
                         "Unsupported starrocks type, column name: %s, data type: %s", field.getName(), field.getType()));
