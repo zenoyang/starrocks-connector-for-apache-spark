@@ -80,6 +80,10 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
             return new StarRocksWriterFactory(logicalInfo.schema(), schema, config);
         }
 
+        if (config.isShareNothingBulkLoadEnabled()) {
+            return new StarRocksWriterFactory(logicalInfo.schema(), schema, config, "bulk_load", 1L);
+        }
+
         // begin transaction
         final String label = this.randomLabel(identifier);
         try (RestClient restClient = RestClientFactory.create(config)) {
@@ -107,6 +111,14 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
     public void commit(WriterCommitMessage[] messages) {
         if (config.notBypassWrite()) {
             LOG.info("Commit batch query: {}, bypass: {}", logicalInfo.queryId(), config.isBypassWrite());
+            return;
+        }
+
+        if (config.isShareNothingBulkLoadEnabled()) {
+            if (config.isGetShareNothingBulkLoadAutoload()) {
+                LOG.info("try to submit the load statement and wait until bulk load finish");
+            }
+            LOG.info("Commit batch query for bulk load: {}", logicalInfo.queryId());
             return;
         }
 
@@ -182,6 +194,10 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
     public void abort(WriterCommitMessage[] messages) {
         if (config.notBypassWrite()) {
             LOG.info("Abort batch query: {}, bypass: {}", logicalInfo.queryId(), config.isBypassWrite());
+            return;
+        }
+        if (config.isShareNothingBulkLoadEnabled()) {
+            LOG.info("Abort batch query for bulk load: {}", logicalInfo.queryId());
             return;
         }
 

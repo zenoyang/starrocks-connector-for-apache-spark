@@ -34,6 +34,7 @@ import org.apache.spark.sql.connector.write.WriterCommitMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -145,12 +146,26 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         }
     }
 
-    private void newStarRocksWriter(InternalRow internalRow) {
+    private void newStarRocksWriter(InternalRow internalRow) throws IOException {
         int schemaSize = schema.getColumns().size();
         tabletId = internalRow.getLong(schemaSize);
         backendId = schema.getBackendId(tabletId);
-        String rootPath = schema.getStoragePath(tabletId);
+        String rootPath;
+        if (config.isShareNothingBulkLoadEnabled()) {
+            rootPath = schema.getStoragePath(config.getShareNothingBulkLoadPath(), tabletId);
+        }  else {
+            rootPath = schema.getStoragePath(tabletId);
+        }
         Map<String, String> configMap = removePrefix(config.getOriginOptions());
+        if (config.isShareNothingBulkLoadEnabled()) {
+            configMap.put("starrocks.format.mode", "share_nothing");
+        }
+        File file = new File(rootPath + "/data");
+        if (!file.exists()) {
+            if (!file.mkdirs()) {
+                throw new IOException("Failed to create directory: " + rootPath);
+            }
+        }
         srWriter = new com.starrocks.format.StarRocksWriter(tabletId, pbSchema, txnId, rootPath, configMap);
         srWriter.open();
 

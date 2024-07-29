@@ -77,6 +77,16 @@ public class StarRocksSchema implements Serializable {
                 .orElse("");
     }
 
+    // get path as {prefix/table id/partition id/index id/tablet id}
+    public String getStoragePath(String prefix, long tabletId) {
+        StringBuilder sb = new StringBuilder(prefix);
+        sb.append(tableId).append("/");
+        sb.append(etlTable.getPartitionId(tabletId)).append("/");
+        sb.append(etlTable.getIndexes().get(0).getIndexId()).append("/");
+        sb.append(tabletId);
+        return sb.toString();
+    }
+
     public long getBackendId(long tabletId) {
         Optional<TabletInfo> tabletInfo = Optional.ofNullable(tabletId2StoragePathMap.get(tabletId));
         return tabletInfo.map(TabletInfo::getBackendId).orElse(-1L);

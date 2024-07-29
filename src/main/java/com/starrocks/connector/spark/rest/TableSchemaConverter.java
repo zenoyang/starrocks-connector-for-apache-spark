@@ -84,14 +84,20 @@ public class TableSchemaConverter implements BiFunction<TableSchema, List<TableP
                 }
                 etlColumns.add(toEtlColumn(column));
             }
-            etlIndexes.add(
-                    new EtlIndex(
-                            indexMeta.getIndexId(),
-                            etlColumns,
-                            indexMeta.getKeysType(),
-                            tableSchema.getBaseIndexId().equals(indexMeta.getIndexId())
-                    )
+            EtlIndex index = new EtlIndex(
+                    indexMeta.getIndexId(),
+                    etlColumns,
+                    indexMeta.getKeysType(),
+                    tableSchema.getBaseIndexId().equals(indexMeta.getIndexId())
             );
+            index.setSortKeyIdxes(indexMeta.getSortKeyIdxes());
+            index.setSortKeyUniqueIds(indexMeta.getSortKeyUniqueIds());
+            index.setSortKeyUniqueIds(indexMeta.getSortKeyUniqueIds());
+            index.setSchemaVersion(indexMeta.getSchemaVersion());
+            index.setShortKeyColumnCount(indexMeta.getShortKeyColumnCount());
+            index.setStorageType(indexMeta.getKeysType());
+            index.setSchemaId(indexMeta.getSchemaId());
+            etlIndexes.add(index);
         }
 
         // partition info
@@ -119,7 +125,7 @@ public class TableSchemaConverter implements BiFunction<TableSchema, List<TableP
                 etlPartitions
         );
 
-        EtlTable etlTable = new EtlTable(etlIndexes, etlPartitionInfo);
+        EtlTable etlTable = new EtlTable(etlIndexes, etlPartitionInfo, tableSchema.getCompressionType(), tableSchema.getBfFpp());
         return new StarRocksSchema(
                 fields,
                 keyFields,

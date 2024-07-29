@@ -37,6 +37,7 @@ import org.apache.commons.lang3.builder.ToStringBuilder;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -185,14 +186,29 @@ public class EtlJobConfig implements Serializable {
         public EtlPartitionInfo partitionInfo;
         @SerializedName(value = "fileGroups")
         public List<EtlFileGroup> fileGroups;
+        @SerializedName("bfFpp")
+        private double bfFpp;
+        @SerializedName("compressionType")
+        private String compressionType;
+
+        private Map<Long, Long> tabletPartitionIndex;
 
         public EtlTable() {
         }
 
-        public EtlTable(List<EtlIndex> etlIndexes, EtlPartitionInfo etlPartitionInfo) {
+        public EtlTable(List<EtlIndex> etlIndexes, EtlPartitionInfo etlPartitionInfo, String compressionType, double bfFpp) {
             this.indexes = etlIndexes;
             this.partitionInfo = etlPartitionInfo;
             this.fileGroups = Lists.newArrayList();
+            this.tabletPartitionIndex = new HashMap<>();
+            for (EtlPartition p : partitionInfo.getPartitions())  {
+                long partitionId = p.getPartitionId();
+                for (Long tabletId : p.getTabletIds()) {
+                    tabletPartitionIndex.put(tabletId, partitionId);
+                }
+            }
+            this.bfFpp = bfFpp;
+            this.compressionType = compressionType;
         }
 
         public void addFileGroup(EtlFileGroup etlFileGroup) {
@@ -207,14 +223,21 @@ public class EtlJobConfig implements Serializable {
             EtlIndex etlIndex = indexes.get(0);
 
             TabletSchemaPB.Builder builder = TabletSchemaPB.newBuilder()
-                    .setId(etlIndex.indexId)
+                    .setId(etlIndex.schemaId)
                     .setKeysType(toPbTabletSchema(etlIndex.indexType))
-                    .setCompressionType(Types.CompressionTypePB.LZ4_FRAME);
+                    .setCompressionType(toPbCompressionType(compressionType))
+                    .setBfFpp(bfFpp)
+                    .setNumShortKeyColumns(etlIndex.getShortKeyColumnCount())
+                    .setNumRowsPerRowBlock(1024)
+                    .addAllSortKeyIdxes(etlIndex.getSortKeyIdxes())
+                    .addAllSortKeyUniqueIds(etlIndex.getSortKeyUniqueIds());
 
             List<EtlColumn> columns = etlIndex.getColumns();
             if (CollectionUtils.isEmpty(columnNames)) {
                 builder.addAllColumn(columns.stream().map(EtlColumn::toPbColumn).collect(Collectors.toList()));
             } else {
+                int maxColUniqueId = 0;
+
                 Map<String, EtlColumn> nameToColumns =
                         columns.stream().collect(Collectors.toMap(e -> e.columnName, e -> e));
                 for (String colName : columnNames) {
@@ -222,8 +245,10 @@ public class EtlJobConfig implements Serializable {
                     if (null == etlColumn) {
                         throw new IllegalStateException("column not found: " + colName);
                     }
+                    maxColUniqueId = Math.max(maxColUniqueId, etlColumn.uniqueId);
                     builder.addColumn(etlColumn.toPbColumn());
                 }
+                builder.setNextColumnUniqueId(maxColUniqueId + 1);
             }
 
             return builder.build();
@@ -233,6 +258,14 @@ public class EtlJobConfig implements Serializable {
             return TableModel.of(indexType)
                     .map(TableModel::toKeysType)
                     .orElseThrow(() -> new IllegalStateException("unknown index type: " + indexType));
+        }
+
+        Types.CompressionTypePB toPbCompressionType(String type) {
+            return Types.CompressionTypePB.valueOf(type != null ? type : "LZ4_FRAME");
+        }
+
+        public long getPartitionId(long tabletId) {
+            return tabletPartitionIndex.getOrDefault(tabletId, -1L);
         }
 
         @Override
@@ -357,6 +390,18 @@ public class EtlJobConfig implements Serializable {
         @SerializedName(value = "isBaseIndex")
         public boolean isBaseIndex;
 
+        @SerializedName(value = "schemaId")
+        private long schemaId;
+        @SerializedName(value = "storageType")
+        private String storageType;
+        @SerializedName(value = "sortKeyIdxes")
+        public List<Integer> sortKeyIdxes;
+        @SerializedName(value = "sortKeyUniqueIds")
+        public List<Integer> sortKeyUniqueIds;
+        @SerializedName(value = "schemaVersion")
+        private int schemaVersion = 0;
+        @SerializedName(value = "shortKeyColumnCount")
+        private short shortKeyColumnCount;
         public EtlIndex() {
         }
 
