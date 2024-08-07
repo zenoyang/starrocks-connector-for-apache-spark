@@ -83,6 +83,7 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
 
     private static final String SHARE_NOTHING_BULK_LOAD_ENABLE = PREFIX + "sharenothing.bulkload.enabled";
     private static final String SHARE_NOTHING_BULK_LOAD_AUTOLOAD = PREFIX + "sharenothing.bulkload.autoload";
+    private static final String SHARE_NOTHING_BULK_LOAD_TIMEOUT = PREFIX + "sharenothing.bulkload.timeout";
     private static final String SHARE_NOTHING_BULK_LOAD_PATH = PREFIX + "sharenothing.bulkload.path";
 
     private String labelPrefix = "spark";
@@ -120,6 +121,7 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
     private boolean shareNothingBulkLoadEnabled = false;
     private boolean getShareNothingBulkLoadAutoload = false;
     private String shareNothingBulkLoadPath = "";
+    private long shareNothingBulkLoadTimeoutS = 3600;
 
     public WriteStarRocksConfig(Map<String, String> originOptions,
                                 StructType sparkSchema,
@@ -184,6 +186,7 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
         shareNothingBulkLoadEnabled = getBoolean(SHARE_NOTHING_BULK_LOAD_ENABLE, false);
         getShareNothingBulkLoadAutoload = getBoolean(SHARE_NOTHING_BULK_LOAD_AUTOLOAD, false);
         shareNothingBulkLoadPath = get(SHARE_NOTHING_BULK_LOAD_PATH, ".staging/bulk_load/");
+        shareNothingBulkLoadTimeoutS = getInt(SHARE_NOTHING_BULK_LOAD_TIMEOUT, 3600);
     }
 
     private void genStreamLoadColumns(StructType sparkSchema, StarRocksSchema starRocksSchema) {
@@ -284,6 +287,10 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
         return !isStreamLoadWrite();
     }
 
+    public String getAppId() {
+        return getOriginOptions().getOrDefault("app.id", "spark-default-app-id");
+    }
+
     public boolean isShareNothingBulkLoadEnabled() {
         return shareNothingBulkLoadEnabled;
     }
@@ -293,7 +300,15 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
     }
 
     public String getShareNothingBulkLoadPath() {
-        return shareNothingBulkLoadPath;
+        if (shareNothingBulkLoadPath.endsWith("/")) {
+            return shareNothingBulkLoadPath + getAppId() + "/";
+        } else {
+            return shareNothingBulkLoadPath + "/" + getAppId() + "/";
+        }
+    }
+
+    public long getShareNothingBulkLoadTimeoutS() {
+        return shareNothingBulkLoadTimeoutS;
     }
 
     public StreamLoadProperties toStreamLoadProperties() {

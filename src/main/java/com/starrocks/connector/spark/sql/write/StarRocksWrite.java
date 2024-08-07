@@ -21,7 +21,9 @@ package com.starrocks.connector.spark.sql.write;
 
 import com.starrocks.connector.spark.exception.TransactionOperateException;
 import com.starrocks.connector.spark.rest.RestClientFactory;
+import com.starrocks.connector.spark.sql.conf.SimpleStarRocksConfig;
 import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
+import com.starrocks.connector.spark.sql.connect.StarRocksConnector;
 import com.starrocks.connector.spark.sql.preprocessor.EtlJobConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.sql.schema.TableIdentifier;
@@ -48,6 +50,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -114,14 +117,66 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
             return;
         }
 
-        if (config.isShareNothingBulkLoadEnabled()) {
-            if (config.isGetShareNothingBulkLoadAutoload()) {
-                LOG.info("try to submit the load statement and wait until bulk load finish");
+        // This branch enabled bulk load and also enabled the auto load
+        if (config.isGetShareNothingBulkLoadAutoload()) {
+            SimpleStarRocksConfig cfg = new SimpleStarRocksConfig(config.getOriginOptions());
+            StarRocksConnector srConnector = new StarRocksConnector(
+                    cfg.getFeJdbcUrl(), cfg.getUsername(), cfg.getPassword());
+            String label = config.getDatabase() + "_" + UUID.randomUUID();
+            String ak = config.getOriginOptions().get("starrocks.fs.s3a.access.key");
+            String sk = config.getOriginOptions().get("starrocks.fs.s3a.secret.key");
+            String endpoint = config.getOriginOptions().get("starrocks.fs.s3a.endpoint");
+
+            srConnector.loadSegmentData(config.getDatabase(), label,
+                    config.getShareNothingBulkLoadPath(), config.getTable(), ak, sk, endpoint);
+            boolean finished = false;
+
+            try {
+                Thread.sleep(3000);
+                String state;
+                long timeout = config.getShareNothingBulkLoadTimeoutS();
+                long starTime = System.currentTimeMillis() / 1000;
+                do {
+                    List<Map<String, String>> loads = srConnector.getSegmentLoadState(config.getDatabase(), label);
+                    if (loads.isEmpty()) {
+                        LOG.error("None segment load found with label: {}", label);
+                        return;
+                    }
+                    // loads only have one row
+                    for (Map<String, String> l : loads) {
+                        state = l.get("State");
+                        if (state.equalsIgnoreCase("CANCELLED")) {
+                            finished = true;
+                            LOG.warn("Load had cancelled with error: {}", l.get("ErrorMsg"));
+                        } else if (state.equalsIgnoreCase("Finished")) {
+                            finished = true;
+                            LOG.info("Load had was finished.");
+                        } else {
+                            LOG.info("Load had not finished, try another loop with state = {}", state);
+                        }
+                    }
+                    Thread.sleep(10000);
+                } while (!finished && (System.currentTimeMillis() / 1000 - starTime) < timeout);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             }
-            LOG.info("Commit batch query for bulk load: {}", logicalInfo.queryId());
+
+            if (finished) {
+                LOG.info("Commit batch query success for bulk load: {}", logicalInfo.queryId());
+            } else {
+                LOG.error("Commit batch query failed with timeout:{} for bulk load: {}",
+                        config.getShareNothingBulkLoadTimeoutS(), logicalInfo.queryId());
+            }
             return;
         }
 
+        // This branch enabled bulk load but disable the auto load
+        if (config.isShareNothingBulkLoadEnabled()) {
+            LOG.info("Commit batch query success for bulk load: {}", logicalInfo.queryId());
+            return;
+        }
+
+        // This branch below is bypass commit for share-nothing starrocks
         List<TabletCommitInfo> tabletCommitInfos = Arrays.stream(messages)
                 .map(message -> (StarRocksWriterCommitMessage) message)
                 .map(StarRocksWriterCommitMessage::getTabletCommitInfo)
