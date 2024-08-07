@@ -59,7 +59,7 @@
     <properties>
         <sr_scala.version>${env.STARROCKS_SCALA_VERSION}</sr_scala.version>
         <sr_spark.version>${env.STARROCKS_SPARK_VERSION}</sr_spark.version>
-        <scala-lang.version>2.12.18</scala-lang.version>
+        <scala-lang.version>2.12.10</scala-lang.version>
         <libthrift.version>0.14.0</libthrift.version>
         <arrow.version>5.0.0</arrow.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

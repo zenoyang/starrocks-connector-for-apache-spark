@@ -36,6 +36,9 @@ import com.starrocks.format.rest.model.TabletFailInfo;
 import com.starrocks.proto.TabletSchema.TabletSchemaPB;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.connector.write.BatchWrite;
 import org.apache.spark.sql.connector.write.DataWriterFactory;
 import org.apache.spark.sql.connector.write.LogicalWriteInfo;
@@ -46,6 +49,9 @@ import org.apache.spark.sql.connector.write.streaming.StreamingWrite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -155,7 +161,9 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
                             LOG.info("Load had not finished, try another loop with state = {}", state);
                         }
                     }
-                    Thread.sleep(10000);
+                    if (!finished) {
+                        Thread.sleep(10000);
+                    }
                 } while (!finished && (System.currentTimeMillis() / 1000 - starTime) < timeout);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
@@ -167,6 +175,16 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
                 LOG.error("Commit batch query failed with timeout:{} for bulk load: {}",
                         config.getShareNothingBulkLoadTimeoutS(), logicalInfo.queryId());
             }
+            try {
+                FileSystem fs = FileSystem.get(new URI(config.getShareNothingBulkLoadPath()), new Configuration());
+                String tablePath = schema.getStorageTablePath(config.getShareNothingBulkLoadPath());
+                LOG.info("Try to delete table path {} for this load.", tablePath);
+                fs.delete(new Path(tablePath), true);
+                LOG.info("Success delete table path {} for this load.", tablePath);
+            } catch (IOException | URISyntaxException e) {
+                throw new RuntimeException(e);
+            }
+
             return;
         }
 

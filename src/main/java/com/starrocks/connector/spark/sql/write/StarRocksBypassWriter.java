@@ -151,7 +151,7 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         backendId = schema.getBackendId(tabletId);
         String rootPath;
         if (config.isShareNothingBulkLoadEnabled()) {
-            rootPath = schema.getStoragePath(config.getShareNothingBulkLoadPath(), tabletId);
+            rootPath = schema.getStorageTabletPath(config.getShareNothingBulkLoadPath(), tabletId);
         }  else {
             rootPath = schema.getStoragePath(tabletId);
         }
