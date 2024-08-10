@@ -335,7 +335,7 @@ public class WriteStarRocksConfig extends StarRocksConfigBase {
                 .connectTimeout(getHttpRequestConnectTimeoutMs())
                 .waitForContinueTimeoutMs(waitForContinueTimeoutMs)
                 .ioThreadCount(ioThreadCount)
-                .setRemoveDuplicatedContentLengthHeader(enableRemoveDuplicatedContentLengthHeader)
+                // .setRemoveDuplicatedContentLengthHeader(enableRemoveDuplicatedContentLengthHeader)
                 .scanningFrequency(scanFrequencyInMs)
                 .cacheMaxBytes(bufferSize)
                 .expectDelayTime(flushInterval)

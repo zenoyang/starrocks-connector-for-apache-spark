@@ -53,13 +53,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.starrocks</groupId>
-    <artifactId>starrocks-spark-connector-${env.SPARK_FEATURE_VERSION}_${env.STARROCKS_SCALA_VERSION}</artifactId>
+    <artifactId>starrocks-spark-connector-3.5_2.12</artifactId>
     <version>1.1.2-ve-bypass-2</version>
 
     <properties>
-        <sr_scala.version>${env.STARROCKS_SCALA_VERSION}</sr_scala.version>
-        <sr_spark.version>${env.STARROCKS_SPARK_VERSION}</sr_spark.version>
-        <scala-lang.version>2.12.10</scala-lang.version>
+        <sr_scala.version>2.12</sr_scala.version>
+        <sr_spark.version>3.5.0</sr_spark.version>
+        <!-- scala version from 2.12.10 to 2.12.18, fix compile error: bad constant pool index: 0 at pos: 49176 -->
+        <scala-lang.version>2.12.18</scala-lang.version>
         <libthrift.version>0.14.0</libthrift.version>
         <arrow.version>5.0.0</arrow.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -69,7 +70,7 @@
         <httpclient.version>4.5.13</httpclient.version>
         <httpcore.version>4.4.15</httpcore.version>
         <fastjson.version>1.2.83</fastjson.version>
-        <starrocks.streamload.version>1.2.9-ve-3</starrocks.streamload.version>
+        <starrocks.streamload.version>1.0-SNAPSHOT</starrocks.streamload.version>
         <starrocks.format.sdk.version>1.0.1-SNAPSHOT</starrocks.format.sdk.version>
     </properties>
 
@@ -415,7 +416,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.22</version>
+            <version>1.18.34</version>
             <scope>compile</scope>
         </dependency>
 
