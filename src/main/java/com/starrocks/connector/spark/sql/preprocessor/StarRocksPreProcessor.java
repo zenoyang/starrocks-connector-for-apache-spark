@@ -360,8 +360,6 @@ public final class StarRocksPreProcessor implements java.io.Serializable {
             parsers.add(ColumnParser.create(column));
         }
 
-        Set<Integer> partitionIdx = new HashSet<>(partitionKeyIndex);
-
         // use PairFlatMapFunction instead of PairMapFunction because there will be
         // 0 or 1 output row for 1 input row
         // TODO (jkj check for flatMapToPair change to mapToPair)
@@ -372,9 +370,9 @@ public final class StarRocksPreProcessor implements java.io.Serializable {
             boolean isCheckData = false;
 
             boolean validData = rowContext.processRow(keyColumnNames, row, dstTableSchema, baseIndex, parsers,
-                    true, keyColumnNames.size(), isCheckData, partitionIdx) &&
+                    true, keyColumnNames.size(), isCheckData) &&
                     rowContext.processRow(valueColumnNames, row, dstTableSchema, baseIndex, parsers, false,
-                            keyColumnNames.size(), isCheckData, partitionIdx);
+                            keyColumnNames.size(), isCheckData);
             if (!validData) {
                 return result;
             }
@@ -429,8 +427,7 @@ public final class StarRocksPreProcessor implements java.io.Serializable {
                                   List<ColumnParser> parsers,
                                   boolean isKey,
                                   int keySize,
-                                  boolean isCheckData,
-                                  Set<Integer> partitionIndexes) {
+                                  boolean isCheckData) {
             for (int i = 0; i < columnNames.size(); i++) {
                 String columnName = columnNames.get(i);
                 int idx = (int) tableSchema.getFieldIndex(columnName).get();
@@ -441,8 +438,7 @@ public final class StarRocksPreProcessor implements java.io.Serializable {
                     return false;
                 }
                 columnObject = convertToJavaType(columnObject, tableSchema.apply(columnName).dataType());
-                // partition key is also key
-                if (isKey || partitionIndexes.contains(idx)) {
+                if (isKey) {
                     keyColumnObjects.add(columnObject);
                 } else {
                     valueColumnObjects.add(columnObject);
