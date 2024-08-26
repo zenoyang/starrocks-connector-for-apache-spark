@@ -190,13 +190,16 @@ public class EtlJobConfig implements Serializable {
         private double bfFpp;
         @SerializedName("compressionType")
         private String compressionType;
+        @SerializedName("fastSchemaChange")
+        private String fastSchemaChange;
 
         private Map<Long, Long> tabletPartitionIndex;
 
         public EtlTable() {
         }
 
-        public EtlTable(List<EtlIndex> etlIndexes, EtlPartitionInfo etlPartitionInfo, String compressionType, double bfFpp) {
+        public EtlTable(List<EtlIndex> etlIndexes, EtlPartitionInfo etlPartitionInfo, String compressionType,
+                        double bfFpp, String fastSchemaChange) {
             this.indexes = etlIndexes;
             this.partitionInfo = etlPartitionInfo;
             this.fileGroups = Lists.newArrayList();
@@ -209,6 +212,7 @@ public class EtlJobConfig implements Serializable {
             }
             this.bfFpp = bfFpp;
             this.compressionType = compressionType;
+            this.fastSchemaChange = fastSchemaChange;
         }
 
         public void addFileGroup(EtlFileGroup etlFileGroup) {
@@ -493,6 +497,8 @@ public class EtlJobConfig implements Serializable {
         public List<Long> tabletIds;
         @SerializedName(value = "backendIds")
         public List<Long> backendIds;
+        @SerializedName(value = "metaUrls")
+        public List<String> metaUrls;
 
         public EtlPartition() {
         }
@@ -505,7 +511,8 @@ public class EtlJobConfig implements Serializable {
                             Integer bucketNum,
                             String storagePath,
                             List<Long> tabletIds,
-                            List<Long> backendIds) {
+                            List<Long> backendIds,
+                            List<String> metaUrls) {
             this.partitionId = partitionId;
             this.startKeys = startKeys;
             this.endKeys = endKeys;
@@ -515,6 +522,7 @@ public class EtlJobConfig implements Serializable {
             this.storagePath = storagePath;
             this.tabletIds = tabletIds;
             this.backendIds = backendIds;
+            this.metaUrls = metaUrls;
         }
 
         @Override

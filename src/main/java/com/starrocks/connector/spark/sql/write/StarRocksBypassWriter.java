@@ -19,6 +19,8 @@
 
 package com.starrocks.connector.spark.sql.write;
 
+import com.starrocks.connector.spark.exception.TransactionOperateException;
+import com.starrocks.connector.spark.rest.RestClientFactory;
 import com.starrocks.connector.spark.rest.models.FieldType;
 import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksField;
@@ -26,6 +28,7 @@ import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.util.EnvUtils;
 import com.starrocks.format.Chunk;
 import com.starrocks.format.Column;
+import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.model.TabletCommitInfo;
 import com.starrocks.proto.TabletSchema;
 import org.apache.spark.sql.catalyst.InternalRow;
@@ -158,6 +161,20 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         Map<String, String> configMap = removePrefix(config.getOriginOptions());
         if (config.isShareNothingBulkLoadEnabled()) {
             configMap.put("starrocks.format.mode", "share_nothing");
+            if (schema.getEtlTable().getFastSchemaChange().equalsIgnoreCase("false")) {
+                try (RestClient restClient = RestClientFactory.create(config)) {
+                    if (schema.getMetadataUrl(tabletId).isEmpty()) {
+                        throw new IllegalStateException("segment load for non fast schema should have meta url.");
+                    }
+                    String metaContext = restClient.getTabletMeta(schema.getMetadataUrl(tabletId));
+                    configMap.put("starrocks.format.metaContext", metaContext);
+                    configMap.put("starrocks.format.fastSchemaChange", "false");
+                } catch (TransactionOperateException | IllegalStateException e) {
+                    throw e;
+                } catch (Exception e) {
+                    throw new IllegalStateException("validate tablet " + tabletId + " error: ", e);
+                }
+            }
         }
         srWriter = new com.starrocks.format.StarRocksWriter(tabletId, pbSchema, txnId, rootPath, configMap);
         srWriter.open();

@@ -31,6 +31,8 @@ import com.starrocks.format.StarRocksWriter;
 import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.TransactionResult;
 import com.starrocks.format.rest.TxnOperation;
+import com.starrocks.format.rest.Validator;
+import com.starrocks.format.rest.model.TableSchema;
 import com.starrocks.format.rest.model.TabletCommitInfo;
 import com.starrocks.format.rest.model.TabletFailInfo;
 import com.starrocks.proto.TabletSchema.TabletSchemaPB;
@@ -90,7 +92,16 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
         }
 
         if (config.isShareNothingBulkLoadEnabled()) {
-            return new StarRocksWriterFactory(logicalInfo.schema(), schema, config, "bulk_load", 1L);
+            try (RestClient restClient = RestClientFactory.create(config)) {
+                TableSchema tableSchema = restClient.getTableSchema(identifier.getCatalog(), identifier.getDatabase(),
+                        identifier.getTable());
+                Validator.validateSegmentLoadExport(tableSchema);
+                return new StarRocksWriterFactory(logicalInfo.schema(), schema, config, "segment_load", 1L);
+            } catch (TransactionOperateException | IllegalStateException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new IllegalStateException("validate table " + identifier.toFullName() + " error: ", e);
+            }
         }
 
         // begin transaction
@@ -175,16 +186,7 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
                 LOG.error("Commit batch query failed with timeout:{} for bulk load: {}",
                         config.getShareNothingBulkLoadTimeoutS(), logicalInfo.queryId());
             }
-            try {
-                FileSystem fs = FileSystem.get(new URI(config.getShareNothingBulkLoadPath()), new Configuration());
-                String tablePath = schema.getStorageTablePath(config.getShareNothingBulkLoadPath());
-                LOG.info("Try to delete table path {} for this load.", tablePath);
-                fs.delete(new Path(tablePath), true);
-                LOG.info("Success delete table path {} for this load.", tablePath);
-            } catch (IOException | URISyntaxException e) {
-                throw new RuntimeException(e);
-            }
-
+            cleanTheTransactionPath();
             return;
         }
 
@@ -270,6 +272,7 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
             return;
         }
         if (config.isShareNothingBulkLoadEnabled()) {
+            cleanTheTransactionPath();
             LOG.info("Abort batch query for bulk load: {}", logicalInfo.queryId());
             return;
         }
@@ -351,5 +354,17 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
 
     public StarRocksSchema getSchema() {
         return schema;
+    }
+
+    private void cleanTheTransactionPath() {
+        try {
+            FileSystem fs = FileSystem.get(new URI(config.getShareNothingBulkLoadPath()), new Configuration());
+            String tablePath = schema.getStorageTablePath(config.getShareNothingBulkLoadPath());
+            LOG.info("Try to delete table path {} for this load.", tablePath);
+            fs.delete(new Path(tablePath), true);
+            LOG.info("Success delete table path {} for this load.", tablePath);
+        } catch (IOException | URISyntaxException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

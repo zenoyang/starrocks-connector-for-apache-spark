@@ -64,7 +64,8 @@ public class StarRocksSchema implements Serializable {
             for (EtlJobConfig.EtlPartition partition : etlTable.getPartitionInfo().getPartitions()) {
                 for (int i = 0; i < partition.getTabletIds().size(); i++) {
                     tabletId2StoragePathMap.put(partition.getTabletIds().get(i),
-                            new TabletInfo(partition.getStoragePath(), partition.getBackendIds().get(i)));
+                            new TabletInfo(partition.getStoragePath(), partition.getBackendIds().get(i),
+                                    partition.getMetaUrls().get(i)));
                 }
             }
         }
@@ -99,6 +100,11 @@ public class StarRocksSchema implements Serializable {
         return tabletInfo.map(TabletInfo::getBackendId).orElse(-1L);
     }
 
+    public String getMetadataUrl(long tabletId) {
+        Optional<TabletInfo> tabletInfo = Optional.ofNullable(tabletId2StoragePathMap.get(tabletId));
+        return tabletInfo.map(TabletInfo::getMetaUrl).orElse("");
+    }
+
     public List<StarRocksField> getColumns() {
         return columns;
     }
@@ -126,10 +132,12 @@ public class StarRocksSchema implements Serializable {
     public class TabletInfo implements Serializable {
         private String storagePath;
         private long backendId;
+        private String metaUrl;
 
-        public TabletInfo(String storagePath, long backendId) {
+        public TabletInfo(String storagePath, long backendId, String metaUrl) {
             this.storagePath = storagePath;
             this.backendId = backendId;
+            this.metaUrl = metaUrl;
         }
 
         public String getStoragePath() {
@@ -138,6 +146,11 @@ public class StarRocksSchema implements Serializable {
 
         public long getBackendId() {
             return backendId;
+        }
+
+        public String getMetaUrl() {
+
+            return metaUrl;
         }
     }
 
