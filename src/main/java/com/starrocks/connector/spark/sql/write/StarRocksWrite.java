@@ -35,6 +35,7 @@ import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.TransactionResult;
 import com.starrocks.format.rest.TxnOperation;
 import com.starrocks.format.rest.Validator;
+import com.starrocks.format.rest.model.Column;
 import com.starrocks.format.rest.model.TableSchema;
 import com.starrocks.format.rest.model.TabletCommitInfo;
 import com.starrocks.format.rest.model.TabletFailInfo;
@@ -106,6 +107,14 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
                     RestClient restClient = RestClientFactory.create(config);
                     tableSchema = restClient.getTableSchema(identifier.getCatalog(), identifier.getDatabase(),
                             identifier.getTable());
+                }
+
+                // REDSR: for adapt to version 2.5 no auto increment
+                for (int i = 0; i < tableSchema.getColumns().size(); ++i) {
+                    Column column = tableSchema.getColumns().get(i);
+                    if (column.getAutoIncrement() == null) {
+                        column.setAutoIncrement(false);
+                    }
                 }
                 Validator.validateSegmentLoadExport(tableSchema);
                 return new StarRocksWriterFactory(logicalInfo.schema(), schema, config, "segment_load", 1L);
