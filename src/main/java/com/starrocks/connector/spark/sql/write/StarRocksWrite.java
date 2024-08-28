@@ -19,6 +19,8 @@
 
 package com.starrocks.connector.spark.sql.write;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.starrocks.connector.spark.exception.TransactionOperateException;
 import com.starrocks.connector.spark.rest.RestClientFactory;
 import com.starrocks.connector.spark.sql.conf.SimpleStarRocksConfig;
@@ -28,6 +30,7 @@ import com.starrocks.connector.spark.sql.preprocessor.EtlJobConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.sql.schema.TableIdentifier;
 import com.starrocks.format.StarRocksWriter;
+import com.starrocks.format.rest.ResponseContent;
 import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.TransactionResult;
 import com.starrocks.format.rest.TxnOperation;
@@ -51,6 +54,7 @@ import org.apache.spark.sql.connector.write.streaming.StreamingWrite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -92,9 +96,17 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
         }
 
         if (config.isShareNothingBulkLoadEnabled()) {
-            try (RestClient restClient = RestClientFactory.create(config)) {
-                TableSchema tableSchema = restClient.getTableSchema(identifier.getCatalog(), identifier.getDatabase(),
-                        identifier.getTable());
+            try {
+                TableSchema tableSchema;
+                if (config.isGetTableSchemaByJsonConfig()) {
+                    ObjectMapper jsonParser = new ObjectMapper();
+                    tableSchema = jsonParser.readValue(new File(config.getTableSchemaPath()),
+                            new TypeReference<ResponseContent<TableSchema>>() {}).getResult();
+                } else {
+                    RestClient restClient = RestClientFactory.create(config);
+                    tableSchema = restClient.getTableSchema(identifier.getCatalog(), identifier.getDatabase(),
+                            identifier.getTable());
+                }
                 Validator.validateSegmentLoadExport(tableSchema);
                 return new StarRocksWriterFactory(logicalInfo.schema(), schema, config, "segment_load", 1L);
             } catch (TransactionOperateException | IllegalStateException e) {
