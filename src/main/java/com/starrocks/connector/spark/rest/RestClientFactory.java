@@ -28,11 +28,14 @@ public class RestClientFactory {
     /**
      * Create {@link RestClient} instance.
      */
-    public static RestClient create(StarRocksConfig config) {
+    public static RestClient create(StarRocksConfig config, boolean skipFeConnectCheck) {
         RestClient.Builder builder = new RestClient.Builder()
-                .setFeEndpoints(config.getFeHttpUrls())
-                .setUsername(config.getUsername())
-                .setPassword(config.getPassword());
+                .setSkipFeConnectCheck(skipFeConnectCheck);
+        if (!skipFeConnectCheck) {
+            builder.setFeEndpoints(config.getFeHttpUrls())
+                    .setUsername(config.getUsername())
+                    .setPassword(config.getPassword());
+        }
 
         Optional.ofNullable(config.getHttpRequestConnectTimeoutMs())
                 .ifPresent(builder::setConnectTimeoutMillis);
@@ -46,4 +49,7 @@ public class RestClientFactory {
         return builder.build();
     }
 
+    public static RestClient create(StarRocksConfig config) {
+        return create(config, false);
+    }
 }

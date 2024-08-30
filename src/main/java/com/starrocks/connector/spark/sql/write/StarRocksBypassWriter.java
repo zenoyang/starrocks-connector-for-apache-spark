@@ -162,7 +162,7 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         if (config.isShareNothingBulkLoadEnabled()) {
             configMap.put("starrocks.format.mode", "share_nothing");
             if (schema.getEtlTable().getFastSchemaChange().equalsIgnoreCase("false")) {
-                try (RestClient restClient = RestClientFactory.create(config)) {
+                try (RestClient restClient = RestClientFactory.create(config, true)) {
                     if (schema.getMetadataUrl(tabletId).isEmpty()) {
                         throw new IllegalStateException("segment load for non fast schema should have meta url.");
                     }
