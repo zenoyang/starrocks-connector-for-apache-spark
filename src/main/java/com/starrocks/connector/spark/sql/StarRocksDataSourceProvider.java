@@ -28,10 +28,15 @@ import com.starrocks.connector.spark.sql.conf.StarRocksConfig;
 import com.starrocks.connector.spark.sql.schema.InferSchema;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.sql.schema.TableIdentifier;
+import com.starrocks.connector.spark.util.ConfigUtils;
 import com.starrocks.format.rest.ResponseContent;
 import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.model.TablePartition;
 import com.starrocks.format.rest.model.TableSchema;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.connector.catalog.Table;
 import org.apache.spark.sql.connector.catalog.TableProvider;
@@ -44,8 +49,10 @@ import org.apache.spark.sql.util.CaseInsensitiveStringMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,12 +101,16 @@ public class StarRocksDataSourceProvider implements RelationProvider,
 
     public static StarRocksSchema getStarRocksSchema(StarRocksConfig config, TableIdentifier identifier) {
         if (config.isGetTableSchemaByJsonConfig()) {
-            String schemaPath = config.getTableSchemaPath();
-            String partitionsPath = config.getTablePartitionsPath();
             try {
-                TableSchema tableSchema = JSON_PARSER.readValue(new File(schemaPath),
+                Configuration configuration = ConfigUtils.getConfiguration(config.getOriginOptions());
+                FileSystem schemaFs = FileSystem.get(new URI(config.getTableSchemaPath()), configuration);
+                InputStream schemaInputStream = schemaFs.open(new Path(config.getTableSchemaPath()));
+                FileSystem partitionFs = FileSystem.get(new URI(config.getTablePartitionsPath()), configuration);
+                FSDataInputStream partitionInputStream = partitionFs.open(new Path(config.getTablePartitionsPath()));
+
+                TableSchema tableSchema = JSON_PARSER.readValue(schemaInputStream,
                         new TypeReference<ResponseContent<TableSchema>>() {}).getResult();
-                List<TablePartition> tablePartitions = JSON_PARSER.readValue(new File(partitionsPath),
+                List<TablePartition> tablePartitions = JSON_PARSER.readValue(partitionInputStream,
                         new TypeReference<ResponseContent<ResponseContent.PagedResult<TablePartition>>>() {})
                         .getResult().getItems();
 
@@ -107,6 +118,8 @@ public class StarRocksDataSourceProvider implements RelationProvider,
             } catch (IOException e) {
                 throw new IllegalStateException(
                         "get table schema from json for " + identifier.toFullName() + " error, " + e.getMessage(), e);
+            } catch (URISyntaxException e) {
+                throw new RuntimeException(e);
             }
         }
 

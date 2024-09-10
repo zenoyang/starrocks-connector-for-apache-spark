@@ -62,6 +62,10 @@ public interface StarRocksConfig extends Serializable {
 
     String getTablePartitionsPath();
 
+    String getTabletSchemaPath();
+
     boolean isGetTableSchemaByJsonConfig();
+
+    boolean isGetTabletSchemaByJsonConfig();
 
 }

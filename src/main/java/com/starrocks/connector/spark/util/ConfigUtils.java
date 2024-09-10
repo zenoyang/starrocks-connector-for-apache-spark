@@ -20,6 +20,9 @@ package com.starrocks.connector.spark.util;
 import com.starrocks.connector.spark.cfg.Settings;
 import com.starrocks.connector.spark.sql.conf.ReadStarRocksConfig.ReadMode;
 import org.apache.commons.lang3.BooleanUtils;
+import org.apache.hadoop.conf.Configuration;
+
+import java.util.Map;
 
 import static com.starrocks.connector.spark.sql.conf.ReadStarRocksConfig.FILTER_PUSHDOWN_ENABLED;
 import static com.starrocks.connector.spark.sql.conf.ReadStarRocksConfig.KEY_READ_MODE;
@@ -51,4 +54,19 @@ public class ConfigUtils {
     private ConfigUtils() {
     }
 
+    public static Configuration getConfiguration(Map<String, String> originOptions) {
+        Configuration configuration = new Configuration();
+        configuration.set("fs.oss.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem");
+        configuration.set("fs.AbstractFileSystem.s3.impl", "org.apache.hadoop.fs.s3a.S3A");
+        configuration.set("fs.s3.endpoint", originOptions.get("starrocks.fs.s3a.endpoint"));
+        configuration.set("fs.s3a.endpoint", originOptions.get("starrocks.fs.s3a.endpoint"));
+        configuration.set("fs.s3a.path.style.access",
+                originOptions.getOrDefault("starrocks.fs.s3a.path.style.access", "true"));
+        configuration.set("fs.s3a.connection.maximum", "2000");
+        configuration.set("fs.s3a.aws.credentials.provider",
+                "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider");
+        configuration.set("fs.s3a.access.key", originOptions.get("starrocks.fs.s3a.access.key"));
+        configuration.set("fs.s3a.secret.key", originOptions.get("starrocks.fs.s3a.secret.key"));
+        return configuration;
+    }
 }

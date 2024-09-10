@@ -419,6 +419,11 @@
             <version>1.18.34</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>org.json</groupId>
+            <artifactId>json</artifactId>
+            <version>20210307</version>
+        </dependency>
 
         <!-- end -->
     </dependencies>

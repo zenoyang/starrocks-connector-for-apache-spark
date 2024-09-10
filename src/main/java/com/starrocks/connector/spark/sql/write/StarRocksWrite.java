@@ -29,6 +29,7 @@ import com.starrocks.connector.spark.sql.connect.StarRocksConnector;
 import com.starrocks.connector.spark.sql.preprocessor.EtlJobConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.sql.schema.TableIdentifier;
+import com.starrocks.connector.spark.util.ConfigUtils;
 import com.starrocks.format.StarRocksWriter;
 import com.starrocks.format.rest.ResponseContent;
 import com.starrocks.format.rest.RestClient;
@@ -55,8 +56,8 @@ import org.apache.spark.sql.connector.write.streaming.StreamingWrite;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
@@ -100,8 +101,11 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
             try {
                 TableSchema tableSchema;
                 if (config.isGetTableSchemaByJsonConfig()) {
+                    Configuration configuration = ConfigUtils.getConfiguration(config.getOriginOptions());
+                    FileSystem schemaFs = FileSystem.get(new URI(config.getTableSchemaPath()), configuration);
+                    InputStream schemaInputStream = schemaFs.open(new Path(config.getTableSchemaPath()));
                     ObjectMapper jsonParser = new ObjectMapper();
-                    tableSchema = jsonParser.readValue(new File(config.getTableSchemaPath()),
+                    tableSchema = jsonParser.readValue(schemaInputStream,
                             new TypeReference<ResponseContent<TableSchema>>() {}).getResult();
                 } else {
                     RestClient restClient = RestClientFactory.create(config);
@@ -379,7 +383,8 @@ public class StarRocksWrite implements BatchWrite, StreamingWrite {
 
     private void cleanTheTransactionPath() {
         try {
-            FileSystem fs = FileSystem.get(new URI(config.getShareNothingBulkLoadPath()), new Configuration());
+            FileSystem fs = FileSystem.get(new URI(config.getShareNothingBulkLoadPath()),
+                    ConfigUtils.getConfiguration(config.getOriginOptions()));
             String tablePath = schema.getStorageTablePath(config.getShareNothingBulkLoadPath());
             LOG.info("Try to delete table path {} for this load.", tablePath);
             fs.delete(new Path(tablePath), true);

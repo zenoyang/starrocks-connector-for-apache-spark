@@ -25,20 +25,30 @@ import com.starrocks.connector.spark.rest.models.FieldType;
 import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksField;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
+import com.starrocks.connector.spark.util.ConfigUtils;
 import com.starrocks.connector.spark.util.EnvUtils;
 import com.starrocks.format.Chunk;
 import com.starrocks.format.Column;
 import com.starrocks.format.rest.RestClient;
 import com.starrocks.format.rest.model.TabletCommitInfo;
 import com.starrocks.proto.TabletSchema;
+import org.apache.commons.io.IOUtils;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.connector.write.WriterCommitMessage;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -134,6 +144,7 @@ public class StarRocksBypassWriter extends StarRocksWriter {
 
     @Override
     public void abort() throws IOException {
+        // todo(zeno) review abort
         LOG.info("Abort write, label: {}, txnId: {}, partitionId: {}, taskId: {}, epochId: {}",
                 label, txnId, partitionId, taskId, epochId);
     }
@@ -162,18 +173,39 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         if (config.isShareNothingBulkLoadEnabled()) {
             configMap.put("starrocks.format.mode", "share_nothing");
             if (schema.getEtlTable().getFastSchemaChange().equalsIgnoreCase("false")) {
-                try (RestClient restClient = RestClientFactory.create(config, true)) {
-                    if (schema.getMetadataUrl(tabletId).isEmpty()) {
-                        throw new IllegalStateException("segment load for non fast schema should have meta url.");
+                if (config.isGetTabletSchemaByJsonConfig()) {
+                    try {
+                        Configuration configuration = ConfigUtils.getConfiguration(config.getOriginOptions());
+                        FileSystem fs = FileSystem.get(new URI(this.config.getTabletSchemaPath()), configuration);
+                        InputStream inputStream = fs.open(new Path(this.config.getTabletSchemaPath()));
+                        String fileContent = IOUtils.toString(inputStream, StandardCharsets.UTF_8);
+                        JSONObject responce = new JSONObject(fileContent);
+                        JSONObject tabletSchemaMap = responce.getJSONObject("result").getJSONObject("tabletSchemaMap");
+                        String metaContext = tabletSchemaMap.getString(String.valueOf(tabletId));
+                        configMap.put("starrocks.format.metaContext", metaContext);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("tablet id: {} metaContext: {}", tabletId, metaContext);
+                        }
+                    } catch (URISyntaxException e) {
+                        throw new RuntimeException(e);
                     }
-                    String metaContext = restClient.getTabletMeta(schema.getMetadataUrl(tabletId));
-                    configMap.put("starrocks.format.metaContext", metaContext);
-                    configMap.put("starrocks.format.fastSchemaChange", "false");
-                } catch (TransactionOperateException | IllegalStateException e) {
-                    throw e;
-                } catch (Exception e) {
-                    throw new IllegalStateException("validate tablet " + tabletId + " error: ", e);
+                } else {
+                    try (RestClient restClient = RestClientFactory.create(config, true)) {
+                        if (schema.getMetadataUrl(tabletId).isEmpty()) {
+                            throw new IllegalStateException("segment load for non fast schema should have meta url.");
+                        }
+                        String metaContext = restClient.getTabletMeta(schema.getMetadataUrl(tabletId));
+                        configMap.put("starrocks.format.metaContext", metaContext);
+                        if (LOG.isDebugEnabled()) {
+                            LOG.debug("tablet id: {} metaContext: {}", tabletId, metaContext);
+                        }
+                    } catch (TransactionOperateException | IllegalStateException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        throw new IllegalStateException("validate tablet " + tabletId + " error: ", e);
+                    }
                 }
+                configMap.put("starrocks.format.fastSchemaChange", "false");
             }
         }
         srWriter = new com.starrocks.format.StarRocksWriter(tabletId, pbSchema, txnId, rootPath, configMap);

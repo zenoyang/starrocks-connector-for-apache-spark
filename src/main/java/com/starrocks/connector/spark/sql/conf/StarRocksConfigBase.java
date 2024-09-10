@@ -65,6 +65,7 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
 
     public static final String KEY_TABLE_SCHEMA_PATH = PREFIX + "table.schema.path";
     public static final String KEY_TABLE_PARTITIONS_PATH = PREFIX + "table.partitions.path";
+    public static final String KEY_TABLET_SCHEMA_PATH = PREFIX + "tablet.schema.path";
 
     protected final Map<String, String> originOptions;
 
@@ -85,11 +86,13 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
 
     private String tableSchemaPath;
     private String tablePartitionsPath;
+    private String tabletSchemaPath;
 
     // When table.schema.path and table.partitions.path are not empty,
     // the table schema and partitions data are obtained through the json file.
     // Therefore, there is no need to provide FE connection information
     private boolean getTableSchemaByJsonConfig = false;
+    private boolean getTabletSchemaByJsonConfig = false;
 
     public StarRocksConfigBase(Map<String, String> options) {
         this.originOptions = new HashMap<>(options);
@@ -118,8 +121,12 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
 
         this.tableSchemaPath = get(KEY_TABLE_SCHEMA_PATH, "");
         this.tablePartitionsPath = get(KEY_TABLE_PARTITIONS_PATH, "");
+        this.tabletSchemaPath = get(KEY_TABLET_SCHEMA_PATH, "");
         if (StringUtils.isNotBlank(tableSchemaPath) && StringUtils.isNotBlank(tablePartitionsPath)) {
             this.getTableSchemaByJsonConfig = true;
+        }
+        if (StringUtils.isNotBlank(tabletSchemaPath)) {
+            this.getTabletSchemaByJsonConfig = true;
         }
     }
 
@@ -205,9 +212,18 @@ public abstract class StarRocksConfigBase implements StarRocksConfig {
         return tablePartitionsPath;
     }
 
+    public String getTabletSchemaPath() {
+        return tabletSchemaPath;
+    }
+
     @Override
     public boolean isGetTableSchemaByJsonConfig() {
         return getTableSchemaByJsonConfig;
+    }
+
+    @Override
+    public boolean isGetTabletSchemaByJsonConfig() {
+        return getTabletSchemaByJsonConfig;
     }
 
     protected String get(final String key) {
