@@ -45,8 +45,16 @@ public class ExecutorResProcessor {
         if (commitMessage instanceof StarRocksWriterCommitMessage) {
             StarRocksWriterCommitMessage msg = (StarRocksWriterCommitMessage) commitMessage;
             dqcList.add(msg.getDqc());
+            LOG.info("add dqc: {}", msg.getDqc());
             if (isShareNothingMode) {
-                dataPathList.add(msg.getWorkSpacePath());
+                // null means the tablet has no data
+                String workSpacePath = msg.getWorkSpacePath();
+                if (workSpacePath != null) {
+                    dataPathList.add(workSpacePath);
+                    LOG.info("add workspace path: {}", workSpacePath);
+                } else {
+                    LOG.info("workspace path is null, skip add");
+                }
             }
         } else {
             LOG.error("Not StarRocksWriterCommitMessage");

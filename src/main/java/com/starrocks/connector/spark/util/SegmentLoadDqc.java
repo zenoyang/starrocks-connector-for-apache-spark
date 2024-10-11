@@ -93,6 +93,9 @@ public class SegmentLoadDqc {
             String colName = field.getName();
             String currentStrValue = "";
             switch (FieldType.of(entry.getKey())) {
+                case BOOLEAN:
+                    currentStrValue = internalRow.getBoolean(colIndex) ? "1" : "0";
+                    break;
                 case TINYINT:
                 case INT:
                     currentStrValue = String.valueOf(internalRow.getInt(colIndex));
@@ -119,6 +122,12 @@ public class SegmentLoadDqc {
                 case CHAR:
                 case VARCHAR:
                     currentStrValue = internalRow.getUTF8String(colIndex).toString();
+                    break;
+                case DATE:
+                    currentStrValue = String.valueOf(internalRow.getInt(colIndex));
+                    break;
+                case DATETIME:
+                    currentStrValue = String.valueOf(internalRow.getLong(colIndex));
                     break;
                 default:
                     throw new UnsupportedOperationException("unsupported column type: " + field.getType());
