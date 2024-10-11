@@ -71,6 +71,29 @@ public class StarRocksWriterUtils {
         }
     }
 
+    public static void moveS3File(String source, String destination, Configuration conf) {
+        if (source == null || destination == null || conf == null) {
+            return;
+        }
+        try {
+            Path srcPath = new Path(source);
+            Path dstPath = new Path(destination);
+            FileSystem fs = FileSystem.get(new URI(source), conf);
+            LOG.info("Move {} to {}...", source, destination);
+            boolean success = fs.mkdirs(dstPath);
+            if (!success) {
+                throw new RuntimeException("mkdir failed, path: " + destination);
+            }
+            success = fs.rename(srcPath, dstPath);
+            if (!success) {
+                throw new RuntimeException("move file failed, src: " + source + " dst: " + destination);
+            }
+        } catch (Exception e) {
+            LOG.info("Move {} to {} failed, error is: ", source, destination, e);
+            throw new RuntimeException(e);
+        }
+    }
+
     public static int murmur3_32(String str) {
         try {
             HashCode hashCode = Hashing.murmur3_32(104729).hashBytes(str.getBytes("utf-8"));

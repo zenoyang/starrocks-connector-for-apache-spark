@@ -47,6 +47,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.IntStream;
 
 import static com.starrocks.connector.spark.cfg.ConfigurationOptions.removePrefix;
@@ -132,7 +133,8 @@ public class StarRocksBypassWriter extends StarRocksWriter {
                 label, txnId, partitionId, taskId, epochId);
         if (srWriter == null) {
             LOG.warn("StarRocksWriter should not be null");
-            return new StarRocksWriterCommitMessage(partitionId, taskId, epochId, label, txnId, null, null, dqc);
+            return new StarRocksWriterCommitMessage(partitionId, taskId, epochId, label, txnId,
+                    null, null, dqc, currentJobFilePath);
         } else {
             srWriter.write(chunk);
             srWriter.flush();
@@ -141,8 +143,8 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         }
 
         return new StarRocksWriterCommitMessage(
-                partitionId, taskId, epochId, label, txnId, null, new TabletCommitInfo(tabletId, backendId), dqc
-        );
+                partitionId, taskId, epochId, label, txnId,
+                null, new TabletCommitInfo(tabletId, backendId), dqc, currentJobFilePath);
     }
 
     @Override
@@ -170,16 +172,14 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         backendId = schema.getBackendId(tabletId);
         String rootPath;
         if (config.isShareNothingBulkLoadEnabled()) {
-            rootPath = schema.getStorageTabletPath(config.getShareNothingBulkLoadPath(), tabletId);
+            rootPath = schema.getStorageTabletPath(config.getWorkSpacePath(), tabletId) + "/" + UUID.randomUUID();
         }  else {
             rootPath = schema.getStoragePath(tabletId);
         }
         Map<String, String> configMap = removePrefix(config.getOriginOptions());
         currentJobFilePath = rootPath;
+        LOG.info("Current job path path: {}", currentJobFilePath);
         if (config.isShareNothingBulkLoadEnabled()) {
-            // When executor process suddenly exits, there may be not have a chance to clean up the written files,
-            // so clean up at the beginning of the trial task
-            StarRocksWriterUtils.clearS3File(currentJobFilePath, ConfigUtils.getConfiguration(config.getOriginOptions()));
             configMap.put("starrocks.format.mode", "share_nothing");
             if (schema.getEtlTable().getFastSchemaChange().equalsIgnoreCase("false")) {
                 try (RestClient restClient = RestClientFactory.create(config)) {

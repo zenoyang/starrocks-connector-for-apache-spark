@@ -40,6 +40,7 @@ public class StarRocksWriterCommitMessage implements WriterCommitMessage {
 
     private final TabletCommitInfo tabletCommitInfo;
     private SegmentLoadDqc dqc = new SegmentLoadDqc();
+    private String workSpacePath = "";
 
     public StarRocksWriterCommitMessage(int partitionId, long taskId, long epochId) {
         this(partitionId, taskId, epochId, null, null);
@@ -77,9 +78,11 @@ public class StarRocksWriterCommitMessage implements WriterCommitMessage {
                                         Long txnId,
                                         StreamLoadSnapshot snapshot,
                                         TabletCommitInfo tabletCommitInfo,
-                                        SegmentLoadDqc dqc) {
+                                        SegmentLoadDqc dqc,
+                                        String workSpacePath) {
         this(partitionId, taskId, epochId, label, txnId, snapshot, tabletCommitInfo);
         this.dqc = dqc;
+        this.workSpacePath = workSpacePath;
     }
 
     public int getPartitionId() {
@@ -154,5 +157,9 @@ public class StarRocksWriterCommitMessage implements WriterCommitMessage {
 
     public SegmentLoadDqc getDqc() {
         return dqc;
+    }
+
+    public String getWorkSpacePath() {
+        return workSpacePath;
     }
 }
