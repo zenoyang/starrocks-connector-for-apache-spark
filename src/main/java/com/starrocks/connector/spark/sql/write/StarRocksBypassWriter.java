@@ -26,6 +26,9 @@ import com.starrocks.connector.spark.sql.conf.WriteStarRocksConfig;
 import com.starrocks.connector.spark.sql.schema.StarRocksField;
 import com.starrocks.connector.spark.sql.schema.StarRocksSchema;
 import com.starrocks.connector.spark.util.EnvUtils;
+import com.starrocks.connector.spark.util.SegmentLoadDqc;
+import com.starrocks.connector.spark.util.StarRocksFormatLibConf;
+import com.starrocks.connector.spark.util.StarRocksWriterUtils;
 import com.starrocks.format.Chunk;
 import com.starrocks.format.Column;
 import com.starrocks.format.rest.RestClient;
@@ -39,6 +42,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.net.InetAddress;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +73,8 @@ public class StarRocksBypassWriter extends StarRocksWriter {
     private long tabletId;
     private long backendId;
     private volatile boolean isFirstRecord = true;
+    private String currentJobFilePath = null;
+    private SegmentLoadDqc dqc = new SegmentLoadDqc();
 
     public StarRocksBypassWriter(WriteStarRocksConfig config,
                                  StarRocksSchema schema,
@@ -102,9 +109,13 @@ public class StarRocksBypassWriter extends StarRocksWriter {
             newStarRocksWriter(internalRow);
             chunk = srWriter.newChunk(batchRowCount);
             IntStream.range(0, schema.getEtlTable().indexes.get(0).getColumns().size())
-                    .forEach(i -> columns.add(chunk.getColumn(i)));
+                    .forEach(i -> {
+                        columns.add(chunk.getColumn(i));
+                        dqc.collectDqcColumn(i, schema);
+                    });
         }
-
+        dqc.dqcProcess(internalRow, schema);
+        dqc.increase();
         internalRow2Chunk(internalRow);
         if (readRowCountInBatch % batchRowCount == 0) {
             srWriter.write(chunk);
@@ -120,15 +131,17 @@ public class StarRocksBypassWriter extends StarRocksWriter {
         LOG.info("Commit write, label: {}, txnId: {}, partitionId: {}, taskId: {}, epochId: {}",
                 label, txnId, partitionId, taskId, epochId);
         if (srWriter == null) {
-            return new StarRocksWriterCommitMessage(partitionId, taskId, epochId, label, txnId);
+            LOG.warn("StarRocksWriter should not be null");
+            return new StarRocksWriterCommitMessage(partitionId, taskId, epochId, label, txnId, null, null, dqc);
         } else {
             srWriter.write(chunk);
             srWriter.flush();
             srWriter.finish();
             chunk.release();
         }
+
         return new StarRocksWriterCommitMessage(
-                partitionId, taskId, epochId, label, txnId, null, new TabletCommitInfo(tabletId, backendId)
+                partitionId, taskId, epochId, label, txnId, null, new TabletCommitInfo(tabletId, backendId), dqc
         );
     }
 
@@ -136,6 +149,9 @@ public class StarRocksBypassWriter extends StarRocksWriter {
     public void abort() throws IOException {
         LOG.info("Abort write, label: {}, txnId: {}, partitionId: {}, taskId: {}, epochId: {}",
                 label, txnId, partitionId, taskId, epochId);
+        dqc.reset();
+        // clear current job file，if error，throw exception
+        StarRocksWriterUtils.clearS3File(currentJobFilePath, ConfigUtils.getConfiguration(config.getOriginOptions()));
     }
 
     @Override
@@ -159,7 +175,11 @@ public class StarRocksBypassWriter extends StarRocksWriter {
             rootPath = schema.getStoragePath(tabletId);
         }
         Map<String, String> configMap = removePrefix(config.getOriginOptions());
+        currentJobFilePath = rootPath;
         if (config.isShareNothingBulkLoadEnabled()) {
+            // When executor process suddenly exits, there may be not have a chance to clean up the written files,
+            // so clean up at the beginning of the trial task
+            StarRocksWriterUtils.clearS3File(currentJobFilePath, ConfigUtils.getConfiguration(config.getOriginOptions()));
             configMap.put("starrocks.format.mode", "share_nothing");
             if (schema.getEtlTable().getFastSchemaChange().equalsIgnoreCase("false")) {
                 try (RestClient restClient = RestClientFactory.create(config)) {
@@ -176,9 +196,17 @@ public class StarRocksBypassWriter extends StarRocksWriter {
                 }
             }
         }
+        try {
+            StarRocksFormatLibConf formatLibConf = new StarRocksFormatLibConf(config.getOriginOptions());
+            java.nio.file.Path currentPath = Paths.get("").toAbsolutePath();
+            formatLibConf.writeConf(currentPath + "/starrocks.conf");
+            InetAddress localHostAddress = InetAddress.getLocalHost();
+            LOG.info("Current executor ip is: " + localHostAddress.getHostAddress());
+        } catch (Exception e) {
+            LOG.error("Set format lib conf error: ", e);
+        }
         srWriter = new com.starrocks.format.StarRocksWriter(tabletId, pbSchema, txnId, rootPath, configMap);
         srWriter.open();
-
         isFirstRecord = false;
     }
 

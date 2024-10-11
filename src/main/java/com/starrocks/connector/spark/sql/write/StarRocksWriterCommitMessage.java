@@ -19,6 +19,7 @@
 
 package com.starrocks.connector.spark.sql.write;
 
+import com.starrocks.connector.spark.util.SegmentLoadDqc;
 import com.starrocks.data.load.stream.StreamLoadSnapshot;
 import com.starrocks.format.rest.model.TabletCommitInfo;
 import org.apache.spark.sql.connector.write.WriterCommitMessage;
@@ -38,6 +39,7 @@ public class StarRocksWriterCommitMessage implements WriterCommitMessage {
     private final StreamLoadSnapshot snapshot;
 
     private final TabletCommitInfo tabletCommitInfo;
+    private SegmentLoadDqc dqc = new SegmentLoadDqc();
 
     public StarRocksWriterCommitMessage(int partitionId, long taskId, long epochId) {
         this(partitionId, taskId, epochId, null, null);
@@ -66,6 +68,18 @@ public class StarRocksWriterCommitMessage implements WriterCommitMessage {
 
         this.snapshot = snapshot;
         this.tabletCommitInfo = tabletCommitInfo;
+    }
+
+    public StarRocksWriterCommitMessage(int partitionId,
+                                        long taskId,
+                                        long epochId,
+                                        String label,
+                                        Long txnId,
+                                        StreamLoadSnapshot snapshot,
+                                        TabletCommitInfo tabletCommitInfo,
+                                        SegmentLoadDqc dqc) {
+        this(partitionId, taskId, epochId, label, txnId, snapshot, tabletCommitInfo);
+        this.dqc = dqc;
     }
 
     public int getPartitionId() {
@@ -132,5 +146,13 @@ public class StarRocksWriterCommitMessage implements WriterCommitMessage {
                 .add("snapshot=" + snapshot)
                 .add("tabletCommitInfo=" + tabletCommitInfo)
                 .toString();
+    }
+
+    public void setDqc(SegmentLoadDqc dqc) {
+        this.dqc = dqc;
+    }
+
+    public SegmentLoadDqc getDqc() {
+        return dqc;
     }
 }
