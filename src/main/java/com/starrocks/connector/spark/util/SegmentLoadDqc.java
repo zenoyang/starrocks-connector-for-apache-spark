@@ -31,12 +31,22 @@ import java.util.List;
 import java.util.Map;
 
 public class SegmentLoadDqc {
+    public static final Long DEFAULT_TABLET_ID = -1L;
     private long rows = 0;
     // for double type, value is Double,
     // for float type, value is Float,
     // others, value is Long
     private Map<String, Object> dqcResMap = new HashMap<>();
     private Map<String, Integer> dqcColumns = new HashMap<>();
+    private Long tableId = DEFAULT_TABLET_ID;
+
+    public Long getTableId() {
+        return this.tableId;
+    }
+
+    public void setTableId(Long tabletId) {
+        this.tableId = tabletId;
+    }
 
     public void reset() {
         dqcColumns.clear();
@@ -52,8 +62,11 @@ public class SegmentLoadDqc {
                 '}';
     }
 
-    public String toJson() {
+    public JSONObject toJsonObject() {
         JSONObject res = new JSONObject();
+        if (!DEFAULT_TABLET_ID.equals(tableId)) {
+            res.put("tablet_id", tableId);
+        }
         res.put("rows", rows);
         JSONArray dqcArray = new JSONArray();
         for (Map.Entry<String, Object> entry : dqcResMap.entrySet()) {
@@ -63,7 +76,7 @@ public class SegmentLoadDqc {
             dqcArray.put(jsonObject);
         }
         res.put("columns", dqcArray);
-        return res.toString();
+        return res;
     }
 
     public void increase() {
@@ -157,11 +170,15 @@ public class SegmentLoadDqc {
         return this;
     }
 
-    public static SegmentLoadDqc mergeDqcList(List<SegmentLoadDqc> dqcList) {
-        SegmentLoadDqc res = new SegmentLoadDqc();
+    public static String getDqcJsonRes(List<SegmentLoadDqc> dqcList) {
+        SegmentLoadDqc allDqcRes = new SegmentLoadDqc();
+        JSONArray tabletDqcJson = new JSONArray();
         for (SegmentLoadDqc dqc : dqcList) {
-            res.merge(dqc);
+            allDqcRes.merge(dqc);
+            tabletDqcJson.put(dqc.toJsonObject());
         }
-        return res;
+        JSONObject res = allDqcRes.toJsonObject();
+        res.put("tablet_dqc", tabletDqcJson);
+        return res.toString();
     }
 }

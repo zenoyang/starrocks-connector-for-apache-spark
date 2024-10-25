@@ -44,8 +44,12 @@ public class ExecutorResProcessor {
     public synchronized void collectExecRes(WriterCommitMessage commitMessage) {
         if (commitMessage instanceof StarRocksWriterCommitMessage) {
             StarRocksWriterCommitMessage msg = (StarRocksWriterCommitMessage) commitMessage;
-            dqcList.add(msg.getDqc());
-            LOG.info("add dqc: {}", msg.getDqc());
+            // default value means the tablet has no data
+            SegmentLoadDqc dqc = msg.getDqc();
+            if (!SegmentLoadDqc.DEFAULT_TABLET_ID.equals(dqc.getTableId())) {
+                dqcList.add(dqc);
+                LOG.info("add dqc for tablet {} : {}", dqc.getTableId(), msg.getDqc());
+            }
             if (isShareNothingMode) {
                 // null means the tablet has no data
                 String workSpacePath = msg.getWorkSpacePath();
@@ -62,7 +66,7 @@ public class ExecutorResProcessor {
     }
 
     public void writeDqcFileToS3() {
-        String dqcResJson = SegmentLoadDqc.mergeDqcList(dqcList).toJson();
+        String dqcResJson = SegmentLoadDqc.getDqcJsonRes(dqcList);
         StarRocksWriterUtils.writeToS3(dqcResJson,
                 config.getShareNothingBulkLoadPath() + "dqc.json", ConfigUtils.getConfiguration(config.getOriginOptions()));
         LOG.info("Dqc result: {}", dqcResJson);
